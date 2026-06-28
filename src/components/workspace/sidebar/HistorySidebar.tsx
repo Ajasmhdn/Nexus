@@ -1,12 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Search, Settings, LogOut, MessageSquare } from "lucide-react";
-import { conversationGroups, currentUser } from "@/lib/mock-data";
+import { conversationGroups } from "@/lib/mock-data";
 import { formatRelativeTime } from "@/lib/format";
 
 export default function HistorySidebar() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [userProfile, setUserProfile] = useState<{ userId: string; email: string; role: string; fullName: string; jobTitle: string | null } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Session fetch failed");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data.user) {
+          setUserProfile(data.user);
+        }
+      })
+      .catch((err) => console.error("Error loading user profile:", err));
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST" });
+      if (res.ok) {
+        router.push("/auth");
+      }
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
 
   const filteredGroups = conversationGroups
     .map((group) => {
@@ -92,20 +122,28 @@ export default function HistorySidebar() {
       {/* User Section */}
       <div className="border-t border-border p-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-accent-light flex items-center justify-center text-accent text-xs font-semibold flex-shrink-0">
-            SC
+          <div className="w-8 h-8 rounded-full bg-accent-light flex items-center justify-center text-accent text-xs font-semibold flex-shrink-0 uppercase">
+            {(userProfile?.fullName || userProfile?.userId || "US").substring(0, 2)}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-text-primary truncate">
-              {currentUser.name}
-            </div>
-            <div className="text-[11px] text-text-muted">{currentUser.role}</div>
+            <p className="font-medium text-sm text-text-primary truncate">
+              {userProfile?.fullName || "Loading..."}
+            </p>
+            <p className="text-xs text-text-muted truncate">
+              {userProfile?.jobTitle || ""}
+            </p>
+            <p className="text-[11px] text-text-muted truncate">
+              {userProfile?.email || ""}
+            </p>
           </div>
           <div className="flex items-center gap-1">
             <button className="w-7 h-7 rounded-md hover:bg-white flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors cursor-pointer">
               <Settings className="w-3.5 h-3.5" />
             </button>
-            <button className="w-7 h-7 rounded-md hover:bg-white flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors cursor-pointer">
+            <button
+              onClick={handleLogout}
+              className="w-7 h-7 rounded-md hover:bg-white flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+            >
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>

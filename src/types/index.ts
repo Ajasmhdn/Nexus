@@ -1,3 +1,5 @@
+import { JobTitle } from "../lib/constants";
+
 // ─── Conversation Types ───────────────────────────────────────────
 
 export interface Conversation {
@@ -120,10 +122,14 @@ export interface AgentResponse {
 // ─── Session & Auth Types ─────────────────────────────────────────
 
 export interface AppUser {
-  userId: string;
-  email: string;
-  role: "admin" | "user";
-  createdAt: string;
+  userId:             string;
+  email:              string;
+  fullName:           string;
+  jobTitle:           JobTitle | null;
+  role:               'admin' | 'user';
+  forcePasswordReset: boolean;
+  isActive:           boolean;
+  createdAt:          string;
 }
 
 export interface ChatSession {

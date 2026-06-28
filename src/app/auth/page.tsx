@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import AuthCard from "@/components/auth/AuthCard";
+import { Suspense } from "react";
 
+/**
+ * Page: /auth
+ * Contains the authentication and recovery cards.
+ * Suspense wrapped to satisfy Next.js CSR bailout validation when reading useSearchParams().
+ */
 export default function AuthPage() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center relative px-6 py-12">
@@ -18,7 +24,16 @@ export default function AuthPage() {
       </Link>
 
       <div className="relative z-10 w-full">
-        <AuthCard />
+        <Suspense
+          fallback={
+            <div className="max-w-[540px] mx-auto bg-white rounded-2xl border border-border shadow-lg shadow-black/5 p-10 flex flex-col items-center justify-center py-24">
+              <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mb-4" />
+              <span className="text-sm text-text-muted">Loading secure session portal...</span>
+            </div>
+          }
+        >
+          <AuthCard />
+        </Suspense>
       </div>
     </div>
   );

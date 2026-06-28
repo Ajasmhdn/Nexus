@@ -7,6 +7,21 @@ import { mysqlTable, varchar, mysqlEnum, boolean, datetime, int, json, text, tim
 export const users = mysqlTable("users", {
   userId: varchar("user_id", { length: 20 }).primaryKey(),
   email: varchar("email", { length: 100 }).notNull().unique(),
+  fullName: varchar('full_name', { length: 100 }).notNull().default(''),
+  jobTitle: mysqlEnum('job_title', [
+    'Administrator',
+    'System Administrator',
+    'Manager',
+    'Operations Engineer',
+    'Production Head',
+    'Maintenance Engineer',
+    'Quality Engineer',
+    'Technical Lead',
+    'Data Engineer',
+    'AI Engineer',
+    'Analyst',
+    'User'
+  ]),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   role: mysqlEnum("role", ["admin", "user"]).notNull().default("user"),
   forcePasswordReset: boolean("force_password_reset").notNull().default(true),
@@ -79,7 +94,6 @@ export const messages = mysqlTable("messages", {
 export const auditLogs = mysqlTable("audit_logs", {
   auditId: int("audit_id").primaryKey().autoincrement(),
   userId: varchar("user_id", { length: 20 })
-    .notNull()
     .references(() => users.userId, { onDelete: "restrict", onUpdate: "cascade" }),
   action: varchar("action", { length: 40 }).notNull(),
   entityType: varchar("entity_type", { length: 20 }),

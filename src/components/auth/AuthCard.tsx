@@ -1,67 +1,197 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Database, ArrowLeft, CheckCircle2, ShieldAlert } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Database, ArrowLeft, CheckCircle2, ShieldAlert, Loader2 } from "lucide-react";
 
 export default function AuthCard() {
-  const [mode, setMode] = useState<"signin" | "reset">("signin");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const resetToken = searchParams.get("reset");
+
+  const [mode, setMode] = useState<"signin" | "forced-reset" | "forgot-password" | "reset-confirm">("signin");
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // Sign In States
   const [userId, setUserId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Password Reset States
-  const [resetUserId, setResetUserId] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetDefaultPassword, setResetDefaultPassword] = useState("");
-  const [resetNewPassword, setResetNewPassword] = useState("");
-  const [resetConfirmNewPassword, setResetConfirmNewPassword] = useState("");
-  const [resetSuccess, setResetSuccess] = useState(false);
-  const [resetError, setResetError] = useState("");
+  // Forced Reset States (First Login)
+  const [forcedNewPassword, setForcedNewPassword] = useState("");
+  const [forcedConfirmPassword, setForcedConfirmPassword] = useState("");
 
-  const handleSignInSubmit = (e: React.FormEvent) => {
+  // Forgot Password States
+  const [forgotEmail, setForgotEmail] = useState("");
+
+  // Token Reset Confirm States
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmConfirmPassword, setConfirmConfirmPassword] = useState("");
+
+  // Automatically switch to reset-confirm if token is in query params
+  useEffect(() => {
+    if (resetToken) {
+      setMode("reset-confirm");
+      setError("");
+      setSuccessMessage("");
+    }
+  }, [resetToken]);
+
+  // Clear messages on any mode transitions (ensuring clean state when Forgot Password loads)
+  useEffect(() => {
+    setError("");
+    setSuccessMessage("");
+  }, [mode]);
+
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId || !email || !password) return;
+    setError("");
+    setSuccessMessage("");
+    setLoading(true);
 
-    // Check if user is an admin — redirect to admin panel
-    if (userId.trim().toLowerCase() === "admin") {
-      router.push("/admin");
-    } else {
-      router.push("/workspace");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Login failed");
+      }
+
+      if (data.requiresReset) {
+        setMode("forced-reset");
+      } else {
+        // Redirect based on role
+        if (data.role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/workspace");
+        }
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleResetSubmit = (e: React.FormEvent) => {
+  const handleForcedResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setResetError("");
+    setError("");
+    setSuccessMessage("");
+    setLoading(true);
 
-    if (
-      !resetUserId ||
-      !resetEmail ||
-      !resetDefaultPassword ||
-      !resetNewPassword ||
-      !resetConfirmNewPassword
-    ) {
-      setResetError("All fields are mandatory.");
+    if (forcedNewPassword !== forcedConfirmPassword) {
+      setError("New passwords do not match.");
+      setLoading(false);
       return;
     }
 
-    if (resetNewPassword !== resetConfirmNewPassword) {
-      setResetError("New passwords do not match.");
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          currentPassword: password, // Using password entered at login
+          newPassword: forcedNewPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Forced password reset failed");
+      }
+
+      setSuccessMessage("Temporary password reset successfully. Please sign in now.");
+      setMode("signin");
+      // Clean inputs
+      setUserId("");
+      setEmail("");
+      setPassword("");
+      setForcedNewPassword("");
+      setForcedConfirmPassword("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Failed to generate recovery link");
+      }
+
+      setSuccessMessage("If a matching account exists, a password reset link has been logged to the console.");
+      setForgotEmail("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
+    setLoading(true);
+
+    if (confirmPassword !== confirmConfirmPassword) {
+      setError("Passwords do not match.");
+      setLoading(false);
       return;
     }
 
-    // Success simulation
-    setResetSuccess(true);
-    // Clear reset states
-    setResetUserId("");
-    setResetEmail("");
-    setResetDefaultPassword("");
-    setResetNewPassword("");
-    setResetConfirmNewPassword("");
+    try {
+      const response = await fetch("/api/auth/reset-confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: resetToken,
+          newPassword: confirmPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Token password reset failed");
+      }
+
+      setSuccessMessage("Password reset completed successfully. You can now log in.");
+      setMode("signin");
+      // Clean query params in URL bar
+      router.replace("/auth");
+      setConfirmPassword("");
+      setConfirmConfirmPassword("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,16 +204,33 @@ export default function AuthCard() {
             <Database className="w-6 h-6 text-accent" />
           </div>
           <span className="text-text-primary font-bold text-2xl tracking-tight">
-            AgentOps
+            OpenInsights
           </span>
           <p className="text-sm text-text-muted mt-1.5 text-center">
-            {mode === "signin"
-              ? "Sign in with your credentials"
-              : "Reset the default password issued by your administrator"}
+            {mode === "signin" && "Sign in with your credentials"}
+            {mode === "forced-reset" && "Update temporary password to proceed"}
+            {mode === "forgot-password" && "Request an email password reset link"}
+            {mode === "reset-confirm" && "Enter your new account password"}
           </p>
         </div>
 
-        {mode === "signin" ? (
+        {/* Global Error Banner */}
+        {error && (
+          <div className="bg-error-muted/40 border border-error/20 rounded-lg p-3.5 flex items-start gap-2.5 text-xs text-error font-medium mb-5 animate-fade-in">
+            <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Global Success Banner */}
+        {successMessage && (
+          <div className="bg-success-muted border border-success/20 rounded-lg p-3.5 flex items-start gap-2.5 text-xs text-success font-medium mb-5 animate-fade-in">
+            <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {mode === "signin" && (
           /* SIGN IN FORM */
           <form onSubmit={handleSignInSubmit} className="space-y-5">
             {/* User ID */}
@@ -97,6 +244,7 @@ export default function AuthCard() {
                 onChange={(e) => setUserId(e.target.value)}
                 placeholder="e.g. USR-4821"
                 required
+                disabled={loading}
                 className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all font-mono"
               />
             </div>
@@ -112,6 +260,7 @@ export default function AuthCard() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
                 required
+                disabled={loading}
                 className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
               />
             </div>
@@ -125,13 +274,14 @@ export default function AuthCard() {
                 <button
                   type="button"
                   onClick={() => {
-                    setMode("reset");
-                    setResetSuccess(false);
-                    setResetError("");
+                    setMode("forgot-password");
+                    setError("");
+                    setSuccessMessage("");
                   }}
+                  disabled={loading}
                   className="text-xs text-accent hover:text-accent-hover font-medium transition-colors cursor-pointer"
                 >
-                  Forgot Default Password?
+                  Forgot Password?
                 </button>
               </div>
               <input
@@ -140,143 +290,170 @@ export default function AuthCard() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                disabled={loading}
                 className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-accent hover:bg-accent-hover text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 hover:shadow-md hover:shadow-accent/30 cursor-pointer mt-2"
+              disabled={loading}
+              className="w-full bg-accent hover:bg-accent-hover disabled:bg-accent/70 text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Sign In
             </button>
           </form>
-        ) : (
-          /* RESET PASSWORD FORM */
-          <div className="space-y-6">
-            {resetSuccess ? (
-              <div className="text-center py-4 space-y-4">
-                <div className="w-12 h-12 rounded-full bg-success-muted text-success flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-text-primary">
-                    Password Reset Successful
-                  </h3>
-                  <p className="text-sm text-text-muted mt-1 px-4">
-                    Your password has been successfully updated. You can now log in using your new credentials.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setMode("signin")}
-                  className="mt-4 inline-flex items-center gap-2 text-sm text-accent hover:text-accent-hover font-medium transition-colors cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back to Sign In
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleResetSubmit} className="space-y-5">
-                {resetError && (
-                  <div className="bg-error-muted/40 border border-error/20 rounded-lg p-3.5 flex items-start gap-2.5 text-xs text-error font-medium">
-                    <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>{resetError}</span>
-                  </div>
-                )}
+        )}
 
-                {/* User ID */}
-                <div>
-                  <label className="text-sm font-medium text-text-primary mb-2 block">
-                    User ID <span className="text-error">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={resetUserId}
-                    onChange={(e) => setResetUserId(e.target.value)}
-                    placeholder="e.g. USR-4821"
-                    required
-                    className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all font-mono"
-                  />
-                </div>
+        {mode === "forced-reset" && (
+          /* FORCED RESET PASSWORD FORM (First login) */
+          <form onSubmit={handleForcedResetSubmit} className="space-y-5 animate-fade-in">
+            <div className="text-xs text-text-muted bg-surface border border-border rounded-lg p-3">
+              🔓 <strong>First Login Security Measure:</strong> You must replace the temporary default password set by the administrator.
+            </div>
 
-                {/* Email */}
-                <div>
-                  <label className="text-sm font-medium text-text-primary mb-2 block">
-                    Email Address <span className="text-error">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    placeholder="you@company.com"
-                    required
-                    className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
-                  />
-                </div>
+            {/* New Password */}
+            <div>
+              <label className="text-sm font-medium text-text-primary mb-2 block">
+                New Password <span className="text-error">*</span>
+              </label>
+              <input
+                type="password"
+                value={forcedNewPassword}
+                onChange={(e) => setForcedNewPassword(e.target.value)}
+                placeholder="Enter strong password"
+                required
+                disabled={loading}
+                className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+              />
+            </div>
 
-                {/* Default Password */}
-                <div>
-                  <label className="text-sm font-medium text-text-primary mb-2 block">
-                    Default Password <span className="text-error">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={resetDefaultPassword}
-                    onChange={(e) => setResetDefaultPassword(e.target.value)}
-                    placeholder="Enter default password given by Admin"
-                    required
-                    className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
-                  />
-                </div>
+            {/* Confirm New Password */}
+            <div>
+              <label className="text-sm font-medium text-text-primary mb-2 block">
+                Confirm New Password <span className="text-error">*</span>
+              </label>
+              <input
+                type="password"
+                value={forcedConfirmPassword}
+                onChange={(e) => setForcedConfirmPassword(e.target.value)}
+                placeholder="Confirm password"
+                required
+                disabled={loading}
+                className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+              />
+              <span className="text-[11px] text-text-muted mt-1.5 block">
+                Password must be at least 8 characters long, containing uppercase, lowercase, and a number.
+              </span>
+            </div>
 
-                {/* New Password */}
-                <div>
-                  <label className="text-sm font-medium text-text-primary mb-2 block">
-                    New Password <span className="text-error">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={resetNewPassword}
-                    onChange={(e) => setResetNewPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
-                  />
-                </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-accent hover:bg-accent-hover disabled:bg-accent/70 text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Set New Password
+            </button>
+          </form>
+        )}
 
-                {/* Confirm New Password */}
-                <div>
-                  <label className="text-sm font-medium text-text-primary mb-2 block">
-                    Confirm New Password <span className="text-error">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={resetConfirmNewPassword}
-                    onChange={(e) => setResetConfirmNewPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
-                  />
-                </div>
+        {mode === "forgot-password" && (
+          /* FORGOT PASSWORD REQUEST FORM */
+          <form onSubmit={handleForgotPasswordSubmit} className="space-y-5 animate-fade-in">
+            {/* Email Address */}
+            <div>
+              <label className="text-sm font-medium text-text-primary mb-2 block">
+                Email Address <span className="text-error">*</span>
+              </label>
+              <input
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="you@company.com"
+                required
+                disabled={loading}
+                className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+              />
+            </div>
 
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-accent hover:bg-accent-hover text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 cursor-pointer"
-                  >
-                    Reset Password
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode("signin")}
-                    className="flex-1 bg-surface hover:bg-surface-alt text-text-secondary py-3 rounded-lg font-medium transition-all text-sm border border-border cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-accent hover:bg-accent-hover disabled:bg-accent/70 text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Send Reset Link
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signin");
+                  setError("");
+                  setSuccessMessage("");
+                }}
+                disabled={loading}
+                className="flex-1 bg-surface hover:bg-surface-alt text-text-secondary py-3 rounded-lg font-medium transition-all text-sm border border-border cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {mode === "reset-confirm" && (
+          /* TOKEN RESET PASSWORD CONFIRM FORM */
+          <form onSubmit={handleConfirmResetSubmit} className="space-y-5 animate-fade-in">
+            <div className="text-xs text-text-muted bg-surface border border-border rounded-lg p-3">
+              🔑 <strong>Resetting password using secure email token.</strong>
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label className="text-sm font-medium text-text-primary mb-2 block">
+                New Password <span className="text-error">*</span>
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Enter strong password"
+                required
+                disabled={loading}
+                className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+              />
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label className="text-sm font-medium text-text-primary mb-2 block">
+                Confirm New Password <span className="text-error">*</span>
+              </label>
+              <input
+                type="password"
+                value={confirmConfirmPassword}
+                onChange={(e) => setConfirmConfirmPassword(e.target.value)}
+                placeholder="Confirm password"
+                required
+                disabled={loading}
+                className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+              />
+              <span className="text-[11px] text-text-muted mt-1.5 block">
+                Password must be at least 8 characters long, containing uppercase, lowercase, and a number.
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-accent hover:bg-accent-hover disabled:bg-accent/70 text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Update Password
+            </button>
+          </form>
         )}
       </div>
     </div>

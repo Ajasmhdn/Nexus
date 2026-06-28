@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { Database, Plus, Pencil, Trash2, RefreshCw, Search, X, ChevronDown, Users, Shield, User, Key } from "lucide-react";
 import Link from "next/link";
+import { JOB_TITLES } from "../../lib/constants";
 
 interface UserRecord {
   id: string;
   email: string;
+  fullName: string;
+  jobTitle: string;
   userCode: string; // Labeled as User ID
-  userType: "User" | "Admin" | "Analyst" | "Manager";
+  userType: "user" | "admin";
   status: "Active" | "Inactive";
   createdAt: string;
   password?: string;
@@ -18,8 +21,10 @@ const sampleUsers: UserRecord[] = [
   {
     id: "1",
     email: "s.chen@meridian-mfg.com",
+    fullName: "Sean Chen",
+    jobTitle: "Analyst",
     userCode: "USR-4821",
-    userType: "Analyst",
+    userType: "user",
     status: "Active",
     createdAt: "2025-03-15",
     password: "TempPass@123",
@@ -27,8 +32,10 @@ const sampleUsers: UserRecord[] = [
   {
     id: "2",
     email: "j.rodriguez@meridian-mfg.com",
+    fullName: "Juan Rodriguez",
+    jobTitle: "Manager",
     userCode: "USR-4822",
-    userType: "Manager",
+    userType: "user",
     status: "Active",
     createdAt: "2025-03-18",
     password: "TempPass@123",
@@ -36,8 +43,10 @@ const sampleUsers: UserRecord[] = [
   {
     id: "3",
     email: "m.thompson@meridian-mfg.com",
+    fullName: "Mark Thompson",
+    jobTitle: "User",
     userCode: "USR-4823",
-    userType: "User",
+    userType: "user",
     status: "Active",
     createdAt: "2025-04-02",
     password: "TempPass@123",
@@ -45,8 +54,10 @@ const sampleUsers: UserRecord[] = [
   {
     id: "4",
     email: "d.nakamura@meridian-mfg.com",
+    fullName: "Daisuke Nakamura",
+    jobTitle: "Operations Engineer",
     userCode: "USR-4824",
-    userType: "User",
+    userType: "user",
     status: "Inactive",
     createdAt: "2025-04-10",
     password: "TempPass@123",
@@ -54,15 +65,17 @@ const sampleUsers: UserRecord[] = [
   {
     id: "5",
     email: "k.patel@meridian-mfg.com",
+    fullName: "Karan Patel",
+    jobTitle: "Analyst",
     userCode: "USR-4825",
-    userType: "Analyst",
+    userType: "user",
     status: "Active",
     createdAt: "2025-05-01",
     password: "TempPass@123",
   },
 ];
 
-const userTypes = ["User", "Admin", "Analyst", "Manager"] as const;
+const userTypes = ["user", "admin"] as const;
 
 export default function AdminPanel() {
   const [users, setUsers] = useState<UserRecord[]>(sampleUsers);
@@ -73,20 +86,26 @@ export default function AdminPanel() {
   // Form state
   const [formUserCode, setFormUserCode] = useState("");
   const [formEmail, setFormEmail] = useState("");
+  const [formFullName, setFormFullName] = useState("");
+  const [formJobTitle, setFormJobTitle] = useState("");
   const [formPassword, setFormPassword] = useState("");
-  const [formUserType, setFormUserType] = useState<UserRecord["userType"]>("User");
+  const [formUserType, setFormUserType] = useState<UserRecord["userType"]>("user");
 
   const filteredUsers = users.filter(
     (u) =>
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.userCode.toLowerCase().includes(searchQuery.toLowerCase())
+      u.userCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.jobTitle.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const resetForm = () => {
     setFormUserCode("");
     setFormEmail("");
+    setFormFullName("");
+    setFormJobTitle("");
     setFormPassword("");
-    setFormUserType("User");
+    setFormUserType("user");
     setEditingUser(null);
     setShowForm(false);
   };
@@ -102,6 +121,8 @@ export default function AdminPanel() {
     setEditingUser(user);
     setFormUserCode(user.userCode);
     setFormEmail(user.email);
+    setFormFullName(user.fullName || "");
+    setFormJobTitle(user.jobTitle || "");
     setFormPassword(user.password || "TempPass@123");
     setFormUserType(user.userType);
     setShowForm(true);
@@ -109,14 +130,14 @@ export default function AdminPanel() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formUserCode || !formEmail || !formPassword || !formUserType) return;
+    if (!formUserCode || !formEmail || !formPassword || !formUserType || !formFullName || !formJobTitle) return;
 
     if (editingUser) {
       // Update
       setUsers((prev) =>
         prev.map((u) =>
           u.id === editingUser.id
-            ? { ...u, userCode: formUserCode, email: formEmail, password: formPassword, userType: formUserType }
+            ? { ...u, userCode: formUserCode, email: formEmail, fullName: formFullName, jobTitle: formJobTitle, password: formPassword, userType: formUserType }
             : u
         )
       );
@@ -126,6 +147,8 @@ export default function AdminPanel() {
         id: String(Date.now()),
         userCode: formUserCode,
         email: formEmail,
+        fullName: formFullName,
+        jobTitle: formJobTitle,
         password: formPassword,
         userType: formUserType,
         status: "Active",
@@ -160,7 +183,7 @@ export default function AdminPanel() {
               <Database className="w-4 h-4 text-accent" />
             </div>
             <span className="text-text-primary font-semibold text-lg tracking-tight">
-              AgentOps
+              OpenInsights
             </span>
             <span className="text-xs text-text-muted bg-accent-light text-accent px-2 py-0.5 rounded-full font-medium ml-1">
               Admin
@@ -238,7 +261,22 @@ export default function AdminPanel() {
                 />
               </div>
 
-              {/* Field 2: Email */}
+              {/* Field 2: Full Name */}
+              <div>
+                <label className="text-sm font-medium text-text-primary mb-2 block">
+                  Full Name <span className="text-error">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formFullName}
+                  onChange={(e) => setFormFullName(e.target.value)}
+                  placeholder="Enter user's full name"
+                  required
+                  className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+                />
+              </div>
+
+              {/* Field 3: Email */}
               <div>
                 <label className="text-sm font-medium text-text-primary mb-2 block">
                   Email <span className="text-error">*</span>
@@ -253,7 +291,30 @@ export default function AdminPanel() {
                 />
               </div>
 
-              {/* Field 3: Password (Default) */}
+              {/* Field 4: Job Title select dropdown */}
+              <div>
+                <label className="text-sm font-medium text-text-primary mb-2 block">
+                  Job Title <span className="text-error">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={formJobTitle}
+                    onChange={(e) => setFormJobTitle(e.target.value)}
+                    required
+                    className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary appearance-none focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="">Select Job Title</option>
+                    {JOB_TITLES.map((title) => (
+                      <option key={title} value={title}>
+                        {title}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Field 5: Password (Default) */}
               <div>
                 <label className="text-sm font-medium text-text-primary mb-2 block">
                   Password <span className="text-error">*</span>
@@ -274,7 +335,7 @@ export default function AdminPanel() {
                 </p>
               </div>
 
-              {/* Field 4: Select User-Type */}
+              {/* Field 6: Select User-Type */}
               <div>
                 <label className="text-sm font-medium text-text-primary mb-2 block">
                   Select User-Type <span className="text-error">*</span>
@@ -288,7 +349,7 @@ export default function AdminPanel() {
                   >
                     {userTypes.map((type) => (
                       <option key={type} value={type}>
-                        {type}
+                        {type === "admin" ? "Admin" : "User"}
                       </option>
                     ))}
                   </select>
@@ -319,8 +380,10 @@ export default function AdminPanel() {
                     onClick={() => {
                       setFormUserCode(`USR-${4826 + users.length}`);
                       setFormEmail("");
+                      setFormFullName("");
+                      setFormJobTitle("");
                       setFormPassword("TempPass@123");
-                      setFormUserType("User");
+                      setFormUserType("user");
                     }}
                     className="flex-1 bg-surface hover:bg-surface-alt text-text-secondary py-3 rounded-lg font-medium transition-all text-sm border border-border cursor-pointer"
                   >
@@ -370,7 +433,13 @@ export default function AdminPanel() {
                     User ID
                   </th>
                   <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                    Full Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
                     Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                    Job Title
                   </th>
                   <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
                     Type
@@ -402,22 +471,24 @@ export default function AdminPanel() {
                         </code>
                       </div>
                     </td>
+                    <td className="px-6 py-3.5 text-sm font-medium text-text-primary">
+                      {user.fullName}
+                    </td>
                     <td className="px-6 py-3.5 text-sm text-text-secondary">
                       {user.email}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-text-secondary">
+                      {user.jobTitle}
                     </td>
                     <td className="px-6 py-3.5">
                       <span
                         className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                          user.userType === "Admin"
+                          user.userType === "admin"
                             ? "bg-accent-light text-accent"
-                            : user.userType === "Manager"
-                            ? "bg-warning-muted text-warning"
-                            : user.userType === "Analyst"
-                            ? "bg-info-muted text-info"
                             : "bg-surface text-text-secondary"
                         }`}
                       >
-                        {user.userType}
+                        {user.userType === "admin" ? "Admin" : "User"}
                       </span>
                     </td>
                     <td className="px-6 py-3.5">
@@ -461,7 +532,7 @@ export default function AdminPanel() {
                 ))}
                 {filteredUsers.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
+                    <td colSpan={8} className="px-6 py-12 text-center">
                       <p className="text-sm text-text-muted">No users found.</p>
                     </td>
                   </tr>

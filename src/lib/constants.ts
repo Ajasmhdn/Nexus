@@ -28,3 +28,20 @@ export const BLOCKED_SQL_KEYWORDS = [
   'TRUNCATE', 'EXEC', 'EXECUTE', 'CREATE', 'GRANT',
   'REVOKE', 'MERGE', 'CALL', 'LOAD', 'REPLACE'
 ] as const;
+
+export const JOB_TITLES = [
+  'Administrator',
+  'System Administrator',
+  'Manager',
+  'Operations Engineer',
+  'Production Head',
+  'Maintenance Engineer',
+  'Quality Engineer',
+  'Technical Lead',
+  'Data Engineer',
+  'AI Engineer',
+  'Analyst',
+  'User'
+] as const;
+
+export type JobTitle = typeof JOB_TITLES[number];
