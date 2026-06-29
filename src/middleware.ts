@@ -63,7 +63,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/admin",
     "/admin/:path*",
+    "/workspace",
     "/workspace/:path*",
     "/api/admin/:path*",
     "/api/chat/:path*",

@@ -1,110 +1,77 @@
 "use client";
 
-import { useState } from "react";
-import { Database, Plus, Pencil, Trash2, RefreshCw, Search, X, ChevronDown, Users, Shield, User, Key } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Database, Plus, Pencil, Trash2, RefreshCw, Search, X, ChevronDown, Users, Shield, User, Key, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { JOB_TITLES } from "../../lib/constants";
-
-interface UserRecord {
-  id: string;
-  email: string;
-  fullName: string;
-  jobTitle: string;
-  userCode: string; // Labeled as User ID
-  userType: "user" | "admin";
-  status: "Active" | "Inactive";
-  createdAt: string;
-  password?: string;
-}
-
-const sampleUsers: UserRecord[] = [
-  {
-    id: "1",
-    email: "s.chen@meridian-mfg.com",
-    fullName: "Sean Chen",
-    jobTitle: "Analyst",
-    userCode: "USR-4821",
-    userType: "user",
-    status: "Active",
-    createdAt: "2025-03-15",
-    password: "TempPass@123",
-  },
-  {
-    id: "2",
-    email: "j.rodriguez@meridian-mfg.com",
-    fullName: "Juan Rodriguez",
-    jobTitle: "Manager",
-    userCode: "USR-4822",
-    userType: "user",
-    status: "Active",
-    createdAt: "2025-03-18",
-    password: "TempPass@123",
-  },
-  {
-    id: "3",
-    email: "m.thompson@meridian-mfg.com",
-    fullName: "Mark Thompson",
-    jobTitle: "User",
-    userCode: "USR-4823",
-    userType: "user",
-    status: "Active",
-    createdAt: "2025-04-02",
-    password: "TempPass@123",
-  },
-  {
-    id: "4",
-    email: "d.nakamura@meridian-mfg.com",
-    fullName: "Daisuke Nakamura",
-    jobTitle: "Operations Engineer",
-    userCode: "USR-4824",
-    userType: "user",
-    status: "Inactive",
-    createdAt: "2025-04-10",
-    password: "TempPass@123",
-  },
-  {
-    id: "5",
-    email: "k.patel@meridian-mfg.com",
-    fullName: "Karan Patel",
-    jobTitle: "Analyst",
-    userCode: "USR-4825",
-    userType: "user",
-    status: "Active",
-    createdAt: "2025-05-01",
-    password: "TempPass@123",
-  },
-];
+import { UserDTO } from "../../types";
 
 const userTypes = ["user", "admin"] as const;
 
 export default function AdminPanel() {
-  // TODO Phase 4: Replace mock users with
-  // real app_db.users query via 
-  // GET /api/admin/users
-  // Create User to call POST /api/admin/users
-  const [users, setUsers] = useState<UserRecord[]>(sampleUsers);
+  const [users, setUsers] = useState<UserDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
+  const [editingUser, setEditingUser] = useState<UserDTO | null>(null);
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST" });
+      if (res.ok) {
+        window.location.href = "/auth";
+      }
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
 
   // Form state
-  const [formUserCode, setFormUserCode] = useState("");
+  const [formUserId, setFormUserId] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formFullName, setFormFullName] = useState("");
   const [formJobTitle, setFormJobTitle] = useState("");
   const [formPassword, setFormPassword] = useState("");
-  const [formUserType, setFormUserType] = useState<UserRecord["userType"]>("user");
+  const [formUserType, setFormUserType] = useState<UserDTO["role"]>("user");
+
+  // Fetch users
+  async function fetchUsers() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/users?limit=100");
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to fetch users");
+      }
+      setUsers(data.users || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const filteredUsers = users.filter(
     (u) =>
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.userCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.userId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.jobTitle.toLowerCase().includes(searchQuery.toLowerCase())
+      (u.jobTitle || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const resetForm = () => {
-    setFormUserCode("");
+    setFormUserId("");
     setFormEmail("");
     setFormFullName("");
     setFormJobTitle("");
@@ -116,65 +83,122 @@ export default function AdminPanel() {
 
   const openCreateForm = () => {
     resetForm();
-    setFormUserCode(`USR-${4826 + users.length}`);
     setFormPassword("TempPass@123"); // Provide default password
     setShowForm(true);
   };
 
-  const openEditForm = (user: UserRecord) => {
+  const openEditForm = (user: UserDTO) => {
     setEditingUser(user);
-    setFormUserCode(user.userCode);
+    setFormUserId(user.userId);
     setFormEmail(user.email);
     setFormFullName(user.fullName || "");
     setFormJobTitle(user.jobTitle || "");
-    setFormPassword(user.password || "TempPass@123");
-    setFormUserType(user.userType);
+    setFormPassword("");
+    setFormUserType(user.role);
     setShowForm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formUserCode || !formEmail || !formPassword || !formUserType || !formFullName || !formJobTitle) return;
+    if (!formUserId || !formEmail || !formFullName || !formJobTitle) return;
 
-    if (editingUser) {
-      // Update
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === editingUser.id
-            ? { ...u, userCode: formUserCode, email: formEmail, fullName: formFullName, jobTitle: formJobTitle, password: formPassword, userType: formUserType }
-            : u
-        )
-      );
-    } else {
-      // Insert
-      const newUser: UserRecord = {
-        id: String(Date.now()),
-        userCode: formUserCode,
-        email: formEmail,
-        fullName: formFullName,
-        jobTitle: formJobTitle,
-        password: formPassword,
-        userType: formUserType,
-        status: "Active",
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setUsers((prev) => [...prev, newUser]);
+    setActionLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      if (editingUser) {
+        // Update User
+        const res = await fetch(`/api/admin/users/${editingUser.userId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: formFullName,
+            jobTitle: formJobTitle,
+            role: formUserType,
+            email: formEmail
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error?.message || "Failed to update user");
+        }
+        setSuccess("User updated successfully");
+      } else {
+        // Create User
+        const res = await fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: formUserId,
+            email: formEmail,
+            fullName: formFullName,
+            jobTitle: formJobTitle,
+            password: formPassword,
+            role: formUserType
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error?.message || "Failed to create user");
+        }
+        setSuccess("User created successfully");
+      }
+      resetForm();
+      await fetchUsers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
     }
-    resetForm();
   };
 
-  const handleDelete = (id: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id));
+  const handleToggleStatus = async (userId: string) => {
+    setActionLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to toggle user status");
+      }
+      setSuccess("User status toggled successfully");
+      await fetchUsers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const toggleStatus = (id: string) => {
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === id
-          ? { ...u, status: u.status === "Active" ? "Inactive" : "Active" }
-          : u
-      )
-    );
+  const handleResetPassword = async (userId: string) => {
+    if (!formPassword) {
+      setError("Please enter a new password to reset");
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: formPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to reset user password");
+      }
+      setSuccess("Password reset successfully. User will be forced to change it on next login.");
+      setFormPassword("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
@@ -187,7 +211,7 @@ export default function AdminPanel() {
               <Database className="w-4 h-4 text-accent" />
             </div>
             <span className="text-text-primary font-semibold text-lg tracking-tight">
-              OpenInsights
+              Nexus-Admin
             </span>
             <span className="text-xs text-text-muted bg-accent-light text-accent px-2 py-0.5 rounded-full font-medium ml-1">
               Admin
@@ -198,12 +222,12 @@ export default function AdminPanel() {
               <Shield className="w-4 h-4 text-accent" />
               Administrator
             </div>
-            <Link
-              href="/auth"
-              className="text-sm text-text-muted hover:text-text-primary transition-colors"
+            <button
+              onClick={handleLogout}
+              className="text-sm text-text-muted hover:text-text-primary transition-colors bg-transparent border-none cursor-pointer outline-none p-0"
             >
               Sign Out
-            </Link>
+            </button>
           </div>
         </div>
       </header>
@@ -219,6 +243,25 @@ export default function AdminPanel() {
             Manage enterprise users, assign default credentials, and configure access levels.
           </p>
         </div>
+
+        {/* Global Notifications */}
+        {error && (
+          <div className="max-w-xl mx-auto mb-6 bg-error-muted border border-error/20 text-error rounded-xl p-4 text-sm flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-error hover:text-error-hover">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {success && (
+          <div className="max-w-xl mx-auto mb-6 bg-success-muted border border-success/20 text-success rounded-xl p-4 text-sm flex items-center justify-between">
+            <span>{success}</span>
+            <button onClick={() => setSuccess(null)} className="text-success hover:text-success-hover">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* CRUD Form Card — Centered */}
         <div className="max-w-xl mx-auto mb-10">
@@ -257,11 +300,12 @@ export default function AdminPanel() {
                 </label>
                 <input
                   type="text"
-                  value={formUserCode}
-                  onChange={(e) => setFormUserCode(e.target.value)}
-                  placeholder="e.g. USR-4821"
+                  value={formUserId}
+                  onChange={(e) => setFormUserId(e.target.value)}
+                  placeholder="e.g. USR_4821"
                   required
-                  className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all font-mono"
+                  disabled={!!editingUser}
+                  className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all font-mono disabled:bg-surface disabled:text-text-muted"
                 />
               </div>
 
@@ -318,26 +362,57 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              {/* Field 5: Password (Default) */}
-              <div>
-                <label className="text-sm font-medium text-text-primary mb-2 block">
-                  Password <span className="text-error">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={formPassword}
-                    onChange={(e) => setFormPassword(e.target.value)}
-                    placeholder="Enter default password"
-                    required
-                    className="w-full bg-white border border-border rounded-lg pl-10 pr-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
-                  />
-                  <Key className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+              {/* Field 5: Password (Admin Reset or Default) */}
+              {editingUser ? (
+                <div>
+                  <label className="text-sm font-medium text-text-primary mb-2 block">
+                    Reset Password
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={formPassword}
+                        onChange={(e) => setFormPassword(e.target.value)}
+                        placeholder="Enter new password to reset"
+                        className="w-full bg-white border border-border rounded-lg pl-10 pr-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+                      />
+                      <Key className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => handleResetPassword(editingUser.userId)}
+                      className="bg-accent hover:bg-accent-hover disabled:bg-accent/55 text-white px-5 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  <p className="text-xs text-text-muted mt-1.5">
+                    Updates password immediately and forces user to change it at their next login.
+                  </p>
                 </div>
-                <p className="text-xs text-text-muted mt-1.5">
-                  Assigned default password. The user will be requested to update this at sign-in.
-                </p>
-              </div>
+              ) : (
+                <div>
+                  <label className="text-sm font-medium text-text-primary mb-2 block">
+                    Password <span className="text-error">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      placeholder="Enter default password"
+                      required
+                      className="w-full bg-white border border-border rounded-lg pl-10 pr-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+                    />
+                    <Key className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                  <p className="text-xs text-text-muted mt-1.5">
+                    Assigned default password. The user will be requested to update this at sign-in.
+                  </p>
+                </div>
+              )}
 
               {/* Field 6: Select User-Type */}
               <div>
@@ -347,7 +422,7 @@ export default function AdminPanel() {
                 <div className="relative">
                   <select
                     value={formUserType}
-                    onChange={(e) => setFormUserType(e.target.value as UserRecord["userType"])}
+                    onChange={(e) => setFormUserType(e.target.value as UserDTO["role"])}
                     required
                     className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary appearance-none focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all cursor-pointer"
                   >
@@ -365,8 +440,10 @@ export default function AdminPanel() {
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-accent hover:bg-accent-hover text-white py-3 rounded-lg font-medium transition-all text-sm cursor-pointer shadow-sm shadow-accent/20"
+                  disabled={actionLoading}
+                  className="flex-1 bg-accent hover:bg-accent-hover disabled:bg-accent/55 text-white py-3 rounded-lg font-medium transition-all text-sm cursor-pointer shadow-sm shadow-accent/20 flex items-center justify-center gap-2"
                 >
+                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   {editingUser ? "Update" : "Insert"}
                 </button>
                 {editingUser && (
@@ -382,7 +459,7 @@ export default function AdminPanel() {
                   <button
                     type="button"
                     onClick={() => {
-                      setFormUserCode(`USR-${4826 + users.length}`);
+                      setFormUserId("");
                       setFormEmail("");
                       setFormFullName("");
                       setFormJobTitle("");
@@ -430,119 +507,128 @@ export default function AdminPanel() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-surface">
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    User ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Full Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Job Title
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Created
-                  </th>
-                  <th className="px-6 py-3 text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-t border-border hover:bg-surface/50 transition-colors"
-                  >
-                    <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-accent-light flex items-center justify-center text-accent text-xs font-semibold flex-shrink-0">
-                          <User className="w-3.5 h-3.5" />
+            {loading ? (
+              <div className="px-6 py-12 text-center flex flex-col items-center justify-center gap-3 text-text-muted">
+                <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                <p className="text-sm">Loading users from database...</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-surface">
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      User ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      Full Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      Job Title
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      Created
+                    </th>
+                    <th className="px-6 py-3 text-right text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr
+                      key={user.userId}
+                      className="border-t border-border hover:bg-surface/50 transition-colors"
+                    >
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-accent-light flex items-center justify-center text-accent text-xs font-semibold flex-shrink-0">
+                            <User className="w-3.5 h-3.5" />
+                          </div>
+                          <code className="text-sm font-mono font-medium text-text-primary">
+                            {user.userId}
+                          </code>
                         </div>
-                        <code className="text-sm font-mono font-medium text-text-primary">
-                          {user.userCode}
-                        </code>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3.5 text-sm font-medium text-text-primary">
-                      {user.fullName}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-text-secondary">
-                      {user.email}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-text-secondary">
-                      {user.jobTitle}
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <span
-                        className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                          user.userType === "admin"
-                            ? "bg-accent-light text-accent"
-                            : "bg-surface text-text-secondary"
-                        }`}
-                      >
-                        {user.userType === "admin" ? "Admin" : "User"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <button
-                        onClick={() => toggleStatus(user.id)}
-                        className="cursor-pointer font-medium"
-                      >
+                      </td>
+                      <td className="px-6 py-3.5 text-sm font-medium text-text-primary">
+                        {user.fullName}
+                      </td>
+                      <td className="px-6 py-3.5 text-sm text-text-secondary">
+                        {user.email}
+                      </td>
+                      <td className="px-6 py-3.5 text-sm text-text-secondary">
+                        {user.jobTitle}
+                      </td>
+                      <td className="px-6 py-3.5">
                         <span
                           className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                            user.status === "Active"
-                              ? "bg-success-muted text-success"
-                              : "bg-error-muted text-error"
+                            user.role === "admin"
+                              ? "bg-accent-light text-accent"
+                              : "bg-surface text-text-secondary"
                           }`}
                         >
-                          {user.status}
+                          {user.role === "admin" ? "Admin" : "User"}
                         </span>
-                      </button>
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-text-muted">
-                      {user.createdAt}
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
+                      </td>
+                      <td className="px-6 py-3.5">
                         <button
-                          onClick={() => openEditForm(user)}
-                          className="w-8 h-8 rounded-lg hover:bg-accent-light flex items-center justify-center text-text-muted hover:text-accent transition-colors cursor-pointer"
-                          title="Edit"
+                          onClick={() => handleToggleStatus(user.userId)}
+                          disabled={actionLoading}
+                          className="cursor-pointer font-medium disabled:opacity-50"
                         >
-                          <Pencil className="w-3.5 h-3.5" />
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                              user.isActive
+                                ? "bg-success-muted text-success"
+                                : "bg-error-muted text-error"
+                            }`}
+                          >
+                            {user.isActive ? "Active" : "Inactive"}
+                          </span>
                         </button>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          className="w-8 h-8 rounded-lg hover:bg-error-muted flex items-center justify-center text-text-muted hover:text-error transition-colors cursor-pointer"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredUsers.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center">
-                      <p className="text-sm text-text-muted">No users found.</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="px-6 py-3.5 text-sm text-text-muted">
+                        {user.createdAt ? user.createdAt.split("T")[0] : ""}
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => openEditForm(user)}
+                            className="w-8 h-8 rounded-lg hover:bg-accent-light flex items-center justify-center text-text-muted hover:text-accent transition-colors cursor-pointer"
+                            title="Edit"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleStatus(user.userId)}
+                            disabled={actionLoading}
+                            className="w-8 h-8 rounded-lg hover:bg-error-muted flex items-center justify-center text-text-muted hover:text-error transition-colors cursor-pointer disabled:opacity-50"
+                            title="Toggle Status (Soft Delete)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center">
+                        <p className="text-sm text-text-muted">No users found.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </main>

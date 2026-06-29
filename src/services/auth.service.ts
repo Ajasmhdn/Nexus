@@ -111,6 +111,11 @@ export async function resetForcedPassword(userId: string, currentPassword: strin
     throw new AppError("Current password incorrect.", 401, "PASSWORD_MISMATCH");
   }
 
+  const isSamePassword = await comparePassword(newPassword, user.passwordHash);
+  if (isSamePassword) {
+    throw new AppError("New password must be different from the current password.", 400, "PASSWORD_REUSE_BLOCKED");
+  }
+
   // Hash and save new password
   const newHash = await hashPassword(newPassword);
   await db
@@ -230,6 +235,11 @@ export async function confirmForgotPassword(userId: string, newPassword: string)
 
   if (!user || !user.isActive) {
     throw new AppError("User not found or inactive.", 401, "USER_NOT_FOUND");
+  }
+
+  const isSamePassword = await comparePassword(newPassword, user.passwordHash);
+  if (isSamePassword) {
+    throw new AppError("New password must be different from the current password.", 400, "PASSWORD_REUSE_BLOCKED");
   }
 
   const newHash = await hashPassword(newPassword);

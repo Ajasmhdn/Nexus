@@ -97,7 +97,10 @@ export default function AuthCard() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || "Forced password reset failed");
+        const errMsg = typeof data.error === "string"
+          ? data.error
+          : (data.error?.message || "Forced password reset failed");
+        throw new Error(errMsg);
       }
 
       setSuccessMessage("Temporary password reset successfully. Please sign in now.");
@@ -195,7 +198,10 @@ export default function AuthCard() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || "Password reset failed");
+        const errMsg = typeof data.error === "string"
+          ? data.error
+          : (data.error?.message || "Password reset failed");
+        throw new Error(errMsg);
       }
 
       setSuccessMessage("Password reset completed successfully. Please sign in.");

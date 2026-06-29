@@ -9,10 +9,10 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 // Test Users data
 const TEST_USERS = {
-  admin: { userId: "TEST_ADMIN", email: "admin@test.com", password: "Password@123", role: "admin", force: false, active: true },
-  user: { userId: "TEST_USER", email: "user@test.com", password: "Password@123", role: "user", force: false, active: true },
-  disabled: { userId: "TEST_DISABLED", email: "disabled@test.com", password: "Password@123", role: "user", force: false, active: false },
-  force: { userId: "TEST_FORCE", email: "force@test.com", password: "Password@123", role: "user", force: true, active: true }
+  admin: { userId: "TEST_API_ADMIN", email: "admin@test.com", password: "Password@123", role: "admin", force: false, active: true },
+  user: { userId: "TEST_API_USER", email: "user@test.com", password: "Password@123", role: "user", force: false, active: true },
+  disabled: { userId: "TEST_API_DISABLED", email: "disabled@test.com", password: "Password@123", role: "user", force: false, active: false },
+  force: { userId: "TEST_API_FORCE", email: "force@test.com", password: "Password@123", role: "user", force: true, active: true }
 };
 
 /**
@@ -22,9 +22,9 @@ async function seedTestUsers() {
   console.log("Seeding test users...");
   
   // Cleanup existing test records
-  await appPool.query("DELETE FROM audit_logs WHERE user_id LIKE 'TEST_%'");
-  await appPool.query("DELETE FROM password_reset_tokens WHERE user_id LIKE 'TEST_%'");
-  await appPool.query("DELETE FROM users WHERE user_id LIKE 'TEST_%'");
+  await appPool.query("DELETE FROM audit_logs WHERE user_id LIKE 'TEST_API_%'");
+  await appPool.query("DELETE FROM password_reset_tokens WHERE user_id LIKE 'TEST_API_%'");
+  await appPool.query("DELETE FROM users WHERE user_id LIKE 'TEST_API_%'");
 
   const hash = await hashPassword("Password@123");
 
@@ -42,9 +42,9 @@ async function seedTestUsers() {
  */
 async function cleanupDatabase() {
   console.log("Cleaning up database test records...");
-  await appPool.query("DELETE FROM audit_logs WHERE user_id LIKE 'TEST_%'");
-  await appPool.query("DELETE FROM password_reset_tokens WHERE user_id LIKE 'TEST_%'");
-  await appPool.query("DELETE FROM users WHERE user_id LIKE 'TEST_%'");
+  await appPool.query("DELETE FROM audit_logs WHERE user_id LIKE 'TEST_API_%'");
+  await appPool.query("DELETE FROM password_reset_tokens WHERE user_id LIKE 'TEST_API_%'");
+  await appPool.query("DELETE FROM users WHERE user_id LIKE 'TEST_API_%'");
 }
 
 /**

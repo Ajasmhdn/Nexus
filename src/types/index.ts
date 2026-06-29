@@ -194,3 +194,17 @@ export interface StatItem {
   value: string;
   label: string;
 }
+
+export interface UserDTO {
+  userId:             string;
+  email:              string;
+  fullName:           string;
+  jobTitle:           string | null;
+  role:               'admin' | 'user';
+  isActive:           boolean;
+  forcePasswordReset: boolean;
+  lastLoginAt:        string | null;
+  createdBy:          string | null;
+  createdAt:          string;
+  updatedAt:          string;
+}

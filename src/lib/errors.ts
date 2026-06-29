@@ -26,6 +26,12 @@ export function handleApiError(error: unknown) {
   logger.error({ err: error }, "API Route Error caught");
 
   if (error instanceof AppError) {
+    if (error.code === "PASSWORD_REUSE_BLOCKED") {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.statusCode }
+      );
+    }
     return NextResponse.json(
       {
         error: {
