@@ -43,7 +43,8 @@ export const passwordResetTokens = mysqlTable("password_reset_tokens", {
   userId: varchar("user_id", { length: 20 })
     .notNull()
     .references(() => users.userId, { onDelete: "cascade", onUpdate: "cascade" }),
-  tokenHash: varchar("token_hash", { length: 255 }).notNull(),
+  tokenHash: varchar("token_hash", { length: 255 }),
+  otpHash: varchar("otp_hash", { length: 255 }),
   expiresAt: datetime("expires_at").notNull(),
   usedAt: datetime("used_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

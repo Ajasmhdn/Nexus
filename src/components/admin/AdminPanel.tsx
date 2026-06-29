@@ -78,6 +78,10 @@ const sampleUsers: UserRecord[] = [
 const userTypes = ["user", "admin"] as const;
 
 export default function AdminPanel() {
+  // TODO Phase 4: Replace mock users with
+  // real app_db.users query via 
+  // GET /api/admin/users
+  // Create User to call POST /api/admin/users
   const [users, setUsers] = useState<UserRecord[]>(sampleUsers);
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);

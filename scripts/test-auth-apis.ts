@@ -291,34 +291,45 @@ async function runTests() {
 
     addResult(
       "Forgot password -> token in DB -> link in console",
-      forgotRes.status === 200 && forgotToken.length > 0 && forgotLog.length > 0
+      forgotRes.status === 200 && forgotToken.length > 0 && forgotToken[0].otp_hash !== null && forgotLog.length > 0
     );
 
     // ----------------------------------------------------------------
     // 9. Reset confirm valid -> password updated, token marked used
     // ----------------------------------------------------------------
-    // Since we need the RAW token to confirm, let's create a known raw token directly for testing
-    const testRawToken = "a".repeat(64); // mock raw token key
-    const testTokenHash = crypto.createHash("sha256").update(testRawToken).digest("hex");
+    const testOtp = "123456";
+    const testOtpHash = crypto.createHash("sha256").update(testOtp).digest("hex");
     const testExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
     
     await appPool.query(
-      "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
-      [TEST_USERS.user.userId, testTokenHash, testExpires]
+      "INSERT INTO password_reset_tokens (user_id, otp_hash, expires_at) VALUES (?, ?, ?)",
+      [TEST_USERS.user.userId, testOtpHash, testExpires]
     );
 
-    const resetConfirmRes = await fetch(`${BASE_URL}/api/auth/reset-confirm`, {
+    const verifyOtpRes = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: testRawToken,
+        email: TEST_USERS.user.email,
+        otp: testOtp
+      })
+    });
+    const resetTokenCookie = getCookieValue(verifyOtpRes.headers, "reset_token");
+
+    const resetConfirmRes = await fetch(`${BASE_URL}/api/auth/reset-confirm`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        Cookie: `reset_token=${resetTokenCookie}`
+      },
+      body: JSON.stringify({
         newPassword: "ConfirmedNewPassword@123"
       })
     });
     
     const [updatedToken] = await appPool.query(
-      "SELECT * FROM password_reset_tokens WHERE token_hash = ?",
-      [testTokenHash]
+      "SELECT * FROM password_reset_tokens WHERE otp_hash = ?",
+      [testOtpHash]
     ) as [any[], any];
 
     const [confirmLog] = await appPool.query(
@@ -328,55 +339,50 @@ async function runTests() {
 
     addResult(
       "Reset confirm valid -> password updated, token marked used",
-      resetConfirmRes.status === 200 && updatedToken[0]?.used_at !== null && confirmLog.length > 0
+      verifyOtpRes.status === 200 && resetConfirmRes.status === 200 && updatedToken[0]?.used_at !== null && confirmLog.length > 0
     );
 
     // ----------------------------------------------------------------
     // 10. Reset confirm expired -> 400 error returned
     // ----------------------------------------------------------------
-    const expiredRawToken = "b".repeat(64);
-    const expiredTokenHash = crypto.createHash("sha256").update(expiredRawToken).digest("hex");
-    const expiredTime = new Date(Date.now() - 24 * 60 * 60 * 1000); // Expired 24 hours ago (timezone resilient)
+    const expiredOtp = "888888";
+    const expiredOtpHash = crypto.createHash("sha256").update(expiredOtp).digest("hex");
+    const expiredTime = new Date(Date.now() - 24 * 60 * 60 * 1000); // Expired 24 hours ago
 
     await appPool.query(
-      "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
-      [TEST_USERS.user.userId, expiredTokenHash, expiredTime]
+      "INSERT INTO password_reset_tokens (user_id, otp_hash, expires_at) VALUES (?, ?, ?)",
+      [TEST_USERS.user.userId, expiredOtpHash, expiredTime]
     );
 
-    const expiredRes = await fetch(`${BASE_URL}/api/auth/reset-confirm`, {
+    const expiredRes = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: expiredRawToken,
-        newPassword: "ExpiredNewPassword@123"
+        email: TEST_USERS.user.email,
+        otp: expiredOtp
       })
     });
     
-    const [expiredLog] = await appPool.query(
-      "SELECT * FROM audit_logs WHERE user_id = ? AND action = 'PASSWORD_RESET_EXPIRED' ORDER BY created_at DESC LIMIT 1",
-      [TEST_USERS.user.userId]
-    ) as [any[], any];
-
     addResult(
       "Reset confirm expired -> 400 error returned",
-      expiredRes.status === 400 && expiredLog.length > 0
+      expiredRes.status === 400
     );
 
     // ----------------------------------------------------------------
     // 11. Reset confirm used token -> 400 error returned
     // ----------------------------------------------------------------
-    const usedRawRes = await fetch(`${BASE_URL}/api/auth/reset-confirm`, {
+    const usedRes = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: testRawToken, // reusing the token validated in test 9
-        newPassword: "ReusedNewPassword@123"
+        email: TEST_USERS.user.email,
+        otp: testOtp
       })
     });
 
     addResult(
       "Reset confirm used token -> 400 error returned",
-      usedRawRes.status === 400
+      usedRes.status === 400
     );
 
     // ----------------------------------------------------------------

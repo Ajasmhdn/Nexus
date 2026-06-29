@@ -5,6 +5,7 @@ import { comparePassword, hashPassword } from "../lib/auth/password";
 import { AppError } from "../lib/errors";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
+import { sendOtpEmail } from "../lib/email";
 
 export interface SignInResult {
   requiresReset: boolean;
@@ -129,93 +130,112 @@ export async function resetForcedPassword(userId: string, currentPassword: strin
 }
 
 /**
- * Creates a hashed password reset token and returns the raw key.
+ * Generates a 6-digit OTP, hashes it, and triggers the SMTP send operation.
+ * Fails silently for email enumeration prevention but logs the event.
  */
-export async function requestForgotPassword(email: string): Promise<string | null> {
+export async function requestForgotPassword(email: string): Promise<void> {
   const [user] = await db
     .select()
     .from(users)
     .where(eq(users.email, email));
 
-  // If user does not exist, log it to the audit logs and fail silently to prevent email enumeration
   if (!user) {
     await db.insert(auditLogs).values({
       userId: null,
       action: "LOGIN_FAILED_NOT_FOUND",
       description: `Password reset request failed: Email '${email}' does not exist.`
     });
-    return null;
+    return;
   }
 
-  // Generate secure token and token hash (SHA-256)
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes expiry
+  // Generate 6-digit OTP
+  const otp = crypto.randomInt(100000, 999999).toString();
+  // SHA-256 hash of OTP
+  const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
-  // Store hashed token
+  // Insert token record (tokenHash set to null)
   await db.insert(passwordResetTokens).values({
     userId: user.userId,
-    tokenHash,
+    tokenHash: null,
+    otpHash,
     expiresAt
   });
+
+  // Trigger real SMTP send
+  await sendOtpEmail(email, otp);
 
   await db.insert(auditLogs).values({
     userId: user.userId,
     action: "PASSWORD_RESET_REQUESTED",
-    description: "Password reset request initiated and token generated."
+    description: "Password reset request initiated and OTP generated."
   });
-
-  return rawToken;
 }
 
 /**
- * Verifies a reset token and updates the user's password inside a database transaction.
- * Checks expiration and logs expired audits OUTSIDE the transaction boundary to prevent rollback.
+ * Validates the OTP submitted by the user. If valid, marks it as used and returns the userId.
  */
-export async function confirmForgotPassword(rawToken: string, newPassword: string): Promise<void> {
-  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+export async function verifyOtp(email: string, otp: string): Promise<string> {
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email));
 
-  // 1. Fetch token record outside transaction
+  if (!user) {
+    throw new AppError("Invalid or expired OTP.", 400, "INVALID_OTP");
+  }
+
+  const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+
+  // Lookup active token record matching user_id, otp_hash, and non-expired, unused
   const [tokenRecord] = await db
     .select()
     .from(passwordResetTokens)
-    .where(eq(passwordResetTokens.tokenHash, tokenHash));
+    .where(
+      and(
+        eq(passwordResetTokens.userId, user.userId),
+        eq(passwordResetTokens.otpHash, otpHash)
+      )
+    );
 
   if (!tokenRecord) {
-    throw new AppError("Invalid or unrecognized password reset token.", 400, "INVALID_TOKEN");
+    throw new AppError("Invalid or expired OTP.", 400, "INVALID_OTP");
   }
 
-  // Check if token already used
   if (tokenRecord.usedAt) {
-    throw new AppError("This password reset link has already been used.", 400, "TOKEN_ALREADY_USED");
+    throw new AppError("Invalid or expired OTP.", 400, "OTP_ALREADY_USED");
   }
 
-  // Check if token has expired
   if (new Date() > tokenRecord.expiresAt) {
-    // Log expired audit outside the transaction to preserve it on error
-    await db.insert(auditLogs).values({
-      userId: tokenRecord.userId,
-      action: "PASSWORD_RESET_EXPIRED",
-      description: "Password reset confirm failed: Token expired."
-    });
-    throw new AppError("This password reset link has expired.", 400, "TOKEN_EXPIRED");
+    throw new AppError("Invalid or expired OTP.", 400, "OTP_EXPIRED");
+  }
+
+  // Mark token as used
+  await db
+    .update(passwordResetTokens)
+    .set({ usedAt: new Date() })
+    .where(eq(passwordResetTokens.tokenId, tokenRecord.tokenId));
+
+  return user.userId;
+}
+
+/**
+ * Reset confirm updates user's password in a transaction.
+ */
+export async function confirmForgotPassword(userId: string, newPassword: string): Promise<void> {
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.userId, userId));
+
+  if (!user || !user.isActive) {
+    throw new AppError("User not found or inactive.", 401, "USER_NOT_FOUND");
   }
 
   const newHash = await hashPassword(newPassword);
 
-  // 2. Execute actual password updates atomically inside a transaction (Refinement #4)
   await db.transaction(async (tx) => {
-    // Re-verify under transaction lock (checking same values)
-    const [tokenRecordTx] = await tx
-      .select()
-      .from(passwordResetTokens)
-      .where(eq(passwordResetTokens.tokenHash, tokenHash));
-
-    if (!tokenRecordTx || tokenRecordTx.usedAt || new Date() > tokenRecordTx.expiresAt) {
-      throw new Error("Lock check verification failed.");
-    }
-
-    // Update user's password
+    // Update user password and clear forced reset flag
     await tx
       .update(users)
       .set({
@@ -223,17 +243,11 @@ export async function confirmForgotPassword(rawToken: string, newPassword: strin
         forcePasswordReset: false,
         passwordChangedAt: new Date()
       })
-      .where(eq(users.userId, tokenRecordTx.userId));
+      .where(eq(users.userId, userId));
 
-    // Mark token as used
-    await tx
-      .update(passwordResetTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(passwordResetTokens.tokenId, tokenRecordTx.tokenId));
-
-    // Log completion audit log inside transactional boundary
+    // Log completion
     await tx.insert(auditLogs).values({
-      userId: tokenRecordTx.userId,
+      userId,
       action: "PASSWORD_RESET_COMPLETED",
       description: "Password reset confirmation successfully applied."
     });

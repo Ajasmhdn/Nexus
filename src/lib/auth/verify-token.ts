@@ -2,9 +2,10 @@ import * as jose from "jose";
 
 export interface JWTPayload extends jose.JWTPayload {
   userId: string;
-  email: string;
-  role: "admin" | "user";
+  email?: string;
+  role?: "admin" | "user";
   sessionId?: string;
+  purpose?: string;
 }
 
 /**

@@ -13,6 +13,5 @@ export async function hashPassword(password: string): Promise<string> {
  * Compares a plain text password with a bcrypt hash.
  */
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
-  const normalizedHash = hash.startsWith("$") ? hash : "$" + hash;
-  return bcrypt.compare(password, normalizedHash);
+  return bcrypt.compare(password, hash);
 }

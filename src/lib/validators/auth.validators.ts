@@ -33,18 +33,16 @@ export const resetPasswordSchema = z.object({
   newPassword: passwordSchema
 });
 
-/**
- * Validator for Request Password Reset (Forgot Password) body payload.
- */
 export const forgotPasswordSchema = z.object({
-  email: z.string().email("Invalid email address format")
+  email: z.string().email()
 });
 
-/**
- * Validator for Confirm Password Reset body payload.
- */
+export const verifyOtpSchema = z.object({
+  email: z.string().email(),
+  otp:   z.string().length(6).regex(/^\d{6}$/, 'OTP must be 6 digits')
+});
+
 export const resetConfirmSchema = z.object({
-  token: z.string().length(64, "Invalid reset token format"),
   newPassword: passwordSchema
 });
 

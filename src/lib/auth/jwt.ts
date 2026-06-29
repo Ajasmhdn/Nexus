@@ -46,3 +46,43 @@ export async function clearAuthCookie() {
     maxAge: 0,
   });
 }
+
+/**
+ * Sign a payload into a short-lived reset JWT token.
+ */
+export async function signResetToken(payload: { userId: string; purpose: "password_reset" }): Promise<string> {
+  const secret = new TextEncoder().encode(getJwtSecret());
+  return new jose.SignJWT({ ...payload })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(secret);
+}
+
+/**
+ * Sets the httpOnly reset_token cookie (5 mins max age).
+ */
+export async function setResetCookie(token: string) {
+  const cookieStore = await cookies();
+  cookieStore.set("reset_token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 300, // 5 minutes
+  });
+}
+
+/**
+ * Clears the reset_token cookie.
+ */
+export async function clearResetCookie() {
+  const cookieStore = await cookies();
+  cookieStore.set("reset_token", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 0,
+  });
+}

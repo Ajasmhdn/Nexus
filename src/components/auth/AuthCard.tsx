@@ -7,9 +7,7 @@ import { Database, ArrowLeft, CheckCircle2, ShieldAlert, Loader2 } from "lucide-
 export default function AuthCard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const resetToken = searchParams.get("reset");
-
-  const [mode, setMode] = useState<"signin" | "forced-reset" | "forgot-password" | "reset-confirm">("signin");
+  const [mode, setMode] = useState<"signin" | "forced-reset" | "forgot-password" | "verify-otp" | "reset-confirm">("signin");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,19 +23,11 @@ export default function AuthCard() {
 
   // Forgot Password States
   const [forgotEmail, setForgotEmail] = useState("");
+  const [otp, setOtp] = useState("");
 
   // Token Reset Confirm States
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmConfirmPassword, setConfirmConfirmPassword] = useState("");
-
-  // Automatically switch to reset-confirm if token is in query params
-  useEffect(() => {
-    if (resetToken) {
-      setMode("reset-confirm");
-      setError("");
-      setSuccessMessage("");
-    }
-  }, [resetToken]);
 
   // Clear messages on any mode transitions (ensuring clean state when Forgot Password loads)
   useEffect(() => {
@@ -141,11 +131,39 @@ export default function AuthCard() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || "Failed to generate recovery link");
+        throw new Error(data.error?.message || "Failed to send password reset OTP");
       }
 
-      setSuccessMessage("If a matching account exists, a password reset link has been logged to the console.");
-      setForgotEmail("");
+      setMode("verify-otp");
+      setSuccessMessage("A 6-digit OTP code has been sent to your email.");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, otp }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || "OTP verification failed");
+      }
+
+      setMode("reset-confirm");
+      setOtp("");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -170,7 +188,6 @@ export default function AuthCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token: resetToken,
           newPassword: confirmPassword,
         }),
       });
@@ -178,13 +195,11 @@ export default function AuthCard() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || "Token password reset failed");
+        throw new Error(data.error?.message || "Password reset failed");
       }
 
-      setSuccessMessage("Password reset completed successfully. You can now log in.");
+      setSuccessMessage("Password reset completed successfully. Please sign in.");
       setMode("signin");
-      // Clean query params in URL bar
-      router.replace("/auth");
       setConfirmPassword("");
       setConfirmConfirmPassword("");
     } catch (err: any) {
@@ -209,7 +224,8 @@ export default function AuthCard() {
           <p className="text-sm text-text-muted mt-1.5 text-center">
             {mode === "signin" && "Sign in with your credentials"}
             {mode === "forced-reset" && "Update temporary password to proceed"}
-            {mode === "forgot-password" && "Request an email password reset link"}
+            {mode === "forgot-password" && "Request an email password reset OTP"}
+            {mode === "verify-otp" && "Enter the 6-digit code sent to your email"}
             {mode === "reset-confirm" && "Enter your new account password"}
           </p>
         </div>
@@ -385,7 +401,7 @@ export default function AuthCard() {
                 className="flex-1 bg-accent hover:bg-accent-hover disabled:bg-accent/70 text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Send Reset Link
+                Send OTP
               </button>
               <button
                 type="button"
@@ -403,11 +419,58 @@ export default function AuthCard() {
           </form>
         )}
 
+        {mode === "verify-otp" && (
+          /* OTP VERIFICATION FORM */
+          <form onSubmit={handleVerifyOtpSubmit} className="space-y-5 animate-fade-in">
+            <div className="text-xs text-text-muted bg-surface border border-border rounded-lg p-3">
+              📩 <strong>OTP sent to {forgotEmail}</strong>. Please enter the 6-digit code to verify your identity.
+            </div>
+
+            {/* OTP Code */}
+            <div>
+              <label className="text-sm font-medium text-text-primary mb-2 block">
+                Verification Code <span className="text-error">*</span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                pattern="\d{6}"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+                required
+                disabled={loading}
+                className="w-full bg-white border border-border rounded-lg px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all tracking-[0.5em] text-center font-mono text-lg font-bold"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-accent hover:bg-accent-hover disabled:bg-accent/70 text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Verify Code
+              </button>
+              <button
+                type="button"
+                onClick={handleForgotPasswordSubmit}
+                disabled={loading}
+                className="flex-1 bg-surface hover:bg-surface-alt text-text-secondary py-3 rounded-lg font-medium transition-all text-sm border border-border cursor-pointer flex items-center justify-center gap-2"
+              >
+                Resend OTP
+              </button>
+            </div>
+          </form>
+        )}
+
         {mode === "reset-confirm" && (
           /* TOKEN RESET PASSWORD CONFIRM FORM */
           <form onSubmit={handleConfirmResetSubmit} className="space-y-5 animate-fade-in">
             <div className="text-xs text-text-muted bg-surface border border-border rounded-lg p-3">
-              🔑 <strong>Resetting password using secure email token.</strong>
+              🔑 <strong>Set a new secure password for your account.</strong>
             </div>
 
             {/* New Password */}
@@ -451,7 +514,7 @@ export default function AuthCard() {
               className="w-full bg-accent hover:bg-accent-hover disabled:bg-accent/70 text-white py-3 rounded-lg font-medium transition-all text-sm shadow-sm shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Update Password
+              Set New Password
             </button>
           </form>
         )}
