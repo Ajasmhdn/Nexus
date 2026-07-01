@@ -1,13 +1,14 @@
-import HistorySidebar from "@/components/workspace/sidebar/HistorySidebar";
-import ConversationArea from "@/components/workspace/conversation/ConversationArea";
-import AnalysisPanel from "@/components/workspace/analysis/AnalysisPanel";
+import WorkspaceClient from "@/components/workspace/WorkspaceClient";
 
-export default function WorkspacePage() {
-  return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      <HistorySidebar />
-      <ConversationArea />
-      <AnalysisPanel />
-    </div>
-  );
+interface PageProps {
+  searchParams: Promise<{ sessionId?: string }>;
+}
+
+/**
+ * Workspace Page (Next.js Server Component)
+ * Resolves search parameters and mounts the interactive client state wrapper.
+ */
+export default async function WorkspacePage({ searchParams }: PageProps) {
+  const { sessionId = "" } = await searchParams;
+  return <WorkspaceClient initialSessionId={sessionId || null} />;
 }

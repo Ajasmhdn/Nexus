@@ -10,7 +10,19 @@ import HistoryTab from "./HistoryTab";
 const tabs = ["Results", "Visualization", "SQL", "Schema", "History"] as const;
 type Tab = (typeof tabs)[number];
 
-export default function AnalysisPanel() {
+interface AnalysisPanelProps {
+  activeSql?: string;
+  activeTable?: any;
+  activeChart?: any;
+  queryHistory?: any[];
+}
+
+export default function AnalysisPanel({
+  activeSql = "",
+  activeTable = null,
+  activeChart = null,
+  queryHistory = []
+}: AnalysisPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>("Results");
 
   return (
@@ -37,11 +49,11 @@ export default function AnalysisPanel() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === "Results" && <ResultsTab />}
-        {activeTab === "Visualization" && <VisualizationTab />}
-        {activeTab === "SQL" && <SqlTab />}
+        {activeTab === "Results" && <ResultsTab table={activeTable} />}
+        {activeTab === "Visualization" && <VisualizationTab chart={activeChart} />}
+        {activeTab === "SQL" && <SqlTab sql={activeSql} />}
         {activeTab === "Schema" && <SchemaTab />}
-        {activeTab === "History" && <HistoryTab />}
+        {activeTab === "History" && <HistoryTab history={queryHistory} />}
       </div>
     </aside>
   );

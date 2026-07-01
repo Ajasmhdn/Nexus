@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { ChevronRight, Table2 } from "lucide-react";
-import { databaseSchema } from "@/lib/mock-data";
+import { TABLE_METADATA } from "../../../ai/schema/metadata";
 
 export default function SchemaTab() {
   const [expanded, setExpanded] = useState<Set<string>>(
-    new Set([databaseSchema.tables[0].name])
+    new Set(["machines"])
   );
 
   const toggleTable = (name: string) => {
@@ -21,15 +21,18 @@ export default function SchemaTab() {
     });
   };
 
+  const tables = Object.keys(TABLE_METADATA);
+
   return (
     <div className="py-1">
-      {databaseSchema.tables.map((table) => {
-        const isOpen = expanded.has(table.name);
+      {tables.map((tableName) => {
+        const table = TABLE_METADATA[tableName];
+        const isOpen = expanded.has(tableName);
         return (
-          <div key={table.name}>
+          <div key={tableName} className="border-b border-border/40">
             <button
-              onClick={() => toggleTable(table.name)}
-              className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-surface-alt/50 transition-colors text-left"
+              onClick={() => toggleTable(tableName)}
+              className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surface-alt/50 transition-colors text-left"
             >
               <ChevronRight
                 className={`w-3.5 h-3.5 text-text-muted transition-transform ${
@@ -38,47 +41,19 @@ export default function SchemaTab() {
               />
               <Table2 className="w-3.5 h-3.5 text-text-muted" />
               <span className="text-sm font-medium text-text-primary">
-                {table.name}
-              </span>
-              <span className="text-[11px] text-text-muted bg-surface-alt px-2 py-0.5 rounded ml-auto">
-                {table.rowCount.toLocaleString()} rows
+                {tableName}
               </span>
             </button>
             {isOpen && (
-              <div className="pl-10 pb-2">
-                {table.columns.map((col) => (
-                  <div
-                    key={col.name}
-                    className="flex items-center gap-2 px-4 py-1.5"
-                  >
-                    <span className="text-[13px] font-mono text-text-secondary">
-                      {col.name}
-                    </span>
-                    <span className="text-[11px] text-text-muted">
-                      {col.type}
-                    </span>
-                    {col.isPrimaryKey && (
-                      <span className="text-[10px] bg-accent-muted text-accent px-1.5 py-0.5 rounded font-medium">
-                        PK
-                      </span>
-                    )}
-                    {col.isForeignKey && (
-                      <span className="text-[10px] bg-warning-muted text-warning px-1.5 py-0.5 rounded font-medium">
-                        FK
-                      </span>
-                    )}
-                    {col.references && (
-                      <span className="text-[11px] text-text-muted italic">
-                        → {col.references}
-                      </span>
-                    )}
-                    {col.nullable && (
-                      <span className="text-[10px] text-text-muted">
-                        nullable
-                      </span>
-                    )}
-                  </div>
-                ))}
+              <div className="px-4 pb-4 pl-10 space-y-2">
+                <p className="text-xs text-text-muted leading-relaxed italic">
+                  {table.description}
+                </p>
+                <div className="rounded-lg bg-[#1E1E2E] overflow-hidden">
+                  <pre className="px-3 py-3 font-mono text-[11px] text-gray-300 leading-relaxed whitespace-pre overflow-auto">
+                    <code>{table.ddl}</code>
+                  </pre>
+                </div>
               </div>
             )}
           </div>

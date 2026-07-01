@@ -1,105 +1,54 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, TrendingUp, AlertCircle, Info, ChevronDown, Check, PieChart, LineChart } from "lucide-react";
+import { BarChart3, TrendingUp, AlertCircle, Info, PieChart, LineChart, Database } from "lucide-react";
 
-interface DataPoint {
-  label: string;
-  value: number;
-  secondaryValue?: number;
+interface VisualizationTabProps {
+  chart?: any; // ChartBlock
 }
 
-const charts = [
-  {
-    id: "downtime",
-    title: "Machine Downtime Distribution (Hours)",
-    description: "Tracks total cumulative downtime hours across main machines.",
-    metrics: { peak: "CNC Mill #3 (127.5 hrs)", total: "374.2 hrs", change: "+12.3% vs last month" },
-    insight: "CNC Mill #3 bearing failure represents 34% of overall downtime. Scheduling preventive bearing inspection every 100 operating hours is highly recommended.",
-    data: [
-      { label: "CNC Mill #3", value: 127.5 },
-      { label: "Hydraulic Press #1", value: 52.3 },
-      { label: "Conveyor Belt #7", value: 44.8 },
-      { label: "Welding Robot #2", value: 38.6 },
-      { label: "Lathe #5", value: 31.2 },
-      { label: "Packaging Line #3", value: 28.4 },
-    ] as DataPoint[],
-  },
-  {
-    id: "technicians",
-    title: "Technician Resolution & Response (Minutes)",
-    description: "Average response and resolution times by technicians.",
-    metrics: { peak: "Rodriguez (12m response)", total: "6 active techs", change: "-4% response latency" },
-    insight: "Rodriguez maintains the lowest response latency (12 mins) across 14 jobs. Thompson has the lowest resolution time but slightly higher initial response times.",
-    data: [
-      { label: "Rodriguez", value: 12, secondaryValue: 372 },
-      { label: "Nakamura", value: 15, secondaryValue: 486 },
-      { label: "Thompson", value: 18, secondaryValue: 348 },
-      { label: "Kim", value: 22, secondaryValue: 564 },
-      { label: "Patel", value: 28, secondaryValue: 438 },
-      { label: "Garcia", value: 38, secondaryValue: 672 },
-    ] as DataPoint[],
-  },
-  {
-    id: "production",
-    title: "Production Line Efficiency (% of Target)",
-    description: "Actual vs target throughput metrics by production line.",
-    metrics: { peak: "Line 2 (104.2%)", total: "94.6% Avg", change: "+1.8% efficiency gain" },
-    insight: "Line 2 exceeded target production by 4.2% due to optimization of shift change handovers. Line 4 remains at 82.1% efficiency due to conveyor speed restrictions.",
-    data: [
-      { label: "Line 1 (Assembly)", value: 92.5 },
-      { label: "Line 2 (Packaging)", value: 104.2 },
-      { label: "Line 3 (Fabrication)", value: 97.8 },
-      { label: "Line 4 (Machining)", value: 82.1 },
-      { label: "Line 5 (Finishing)", value: 96.4 },
-    ] as DataPoint[],
-  },
-];
-
-const chartTypes = [
-  { id: "bar", label: "Bar Chart", icon: BarChart3 },
-  { id: "line", label: "Line Chart", icon: LineChart },
-  { id: "donut", label: "Donut Chart", icon: PieChart },
-];
-
-export default function VisualizationTab() {
-  const [selectedChartId, setSelectedChartId] = useState("downtime");
-  const [chartType, setChartType] = useState<"bar" | "line" | "donut">("bar");
+export default function VisualizationTab({ chart }: VisualizationTabProps) {
+  const [chartTypeOverride, setChartTypeOverride] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const activeChart = charts.find((c) => c.id === selectedChartId) || charts[0];
-  const maxVal = Math.max(...activeChart.data.map((d) => d.value));
+  if (!chart || !chart.data || chart.data.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[300px] text-text-muted text-sm space-y-2 p-4">
+        <Database className="w-8 h-8 opacity-40" />
+        <p className="font-medium">No visualization active</p>
+        <p className="text-xs text-center">Chart data is automatically generated when query results contain 2 to 20 rows.</p>
+      </div>
+    );
+  }
 
-  // Donut chart calculations
-  const totalSum = activeChart.data.reduce((sum, d) => sum + d.value, 0);
+  const chartType = chartTypeOverride || chart.chartType || "bar";
+  const { data, xAxisKey, yAxisKey, title } = chart;
+
+  // Extract values
+  const maxVal = Math.max(...data.map((d: any) => Number(d[yAxisKey]) || 0), 1);
+  const totalSum = data.reduce((sum: number, d: any) => sum + (Number(d[yAxisKey]) || 0), 0);
   let cumulativeAngle = 0;
+
+  const chartTypes = [
+    { id: "bar", label: "Bar Chart", icon: BarChart3 },
+    { id: "line", label: "Line Chart", icon: LineChart },
+    { id: "pie", label: "Donut Chart", icon: PieChart },
+  ];
 
   return (
     <div className="p-6 space-y-6">
       {/* Controls Card */}
       <div className="bg-surface rounded-xl border border-border p-4 space-y-4">
-        {/* Selector */}
         <div>
           <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
-            Select Analytic Dataset
+            Active Dataset
           </label>
-          <div className="relative">
-            <select
-              value={selectedChartId}
-              onChange={(e) => setSelectedChartId(e.target.value)}
-              className="w-full bg-white border border-border rounded-lg pl-3 pr-10 py-2.5 text-sm text-text-primary appearance-none focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none cursor-pointer font-medium"
-            >
-              {charts.map((chart) => (
-                <option key={chart.id} value={chart.id}>
-                  {chart.title}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <div className="text-sm font-medium text-text-primary">
+            {title || "Dynamic Visualization"}
           </div>
         </div>
 
-        {/* Chart Types */}
+        {/* Chart Types Selector */}
         <div>
           <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
             Visualization Type
@@ -111,7 +60,7 @@ export default function VisualizationTab() {
               return (
                 <button
                   key={type.id}
-                  onClick={() => setChartType(type.id as any)}
+                  onClick={() => setChartTypeOverride(type.id)}
                   className={`flex-1 py-1.5 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                     isActive
                       ? "bg-accent-light text-accent border border-accent/15"
@@ -128,24 +77,17 @@ export default function VisualizationTab() {
       </div>
 
       {/* KPI Section */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-white border border-border rounded-xl p-3.5 shadow-sm">
-          <span className="text-[10px] text-text-muted font-medium uppercase tracking-wider block">Peak Metric</span>
+          <span className="text-[10px] text-text-muted font-medium uppercase tracking-wider block">Y-Axis Metric</span>
           <span className="text-sm font-semibold text-text-primary mt-1 block truncate">
-            {activeChart.metrics.peak}
+            {yAxisKey}
           </span>
         </div>
         <div className="bg-white border border-border rounded-xl p-3.5 shadow-sm">
-          <span className="text-[10px] text-text-muted font-medium uppercase tracking-wider block">Cumulative</span>
+          <span className="text-[10px] text-text-muted font-medium uppercase tracking-wider block">Total Sum</span>
           <span className="text-sm font-semibold text-text-primary mt-1 block truncate">
-            {activeChart.metrics.total}
-          </span>
-        </div>
-        <div className="bg-white border border-border rounded-xl p-3.5 shadow-sm">
-          <span className="text-[10px] text-text-muted font-medium uppercase tracking-wider block">Trend</span>
-          <span className="text-xs font-semibold text-success mt-1.5 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" />
-            {activeChart.metrics.change}
+            {totalSum.toLocaleString()}
           </span>
         </div>
       </div>
@@ -154,20 +96,22 @@ export default function VisualizationTab() {
       <div className="bg-white border border-border rounded-xl p-6 shadow-sm flex flex-col justify-center min-h-[300px]">
         {chartType === "bar" && (
           <div className="space-y-4 w-full">
-            {activeChart.data.map((item, idx) => {
-              const pct = (item.value / maxVal) * 100;
+            {data.map((item: any, idx: number) => {
+              const val = Number(item[yAxisKey]) || 0;
+              const label = String(item[xAxisKey] || "");
+              const pct = (val / maxVal) * 100;
               const isHovered = hoveredIndex === idx;
               return (
                 <div
-                  key={item.label}
+                  key={idx}
                   className="space-y-1.5"
                   onMouseEnter={() => setHoveredIndex(idx)}
                   onMouseLeave={() => setHoveredIndex(null)}
                 >
                   <div className="flex justify-between text-xs font-medium">
-                    <span className="text-text-primary">{item.label}</span>
+                    <span className="text-text-primary">{label}</span>
                     <span className="text-text-secondary font-mono">
-                      {item.value} {selectedChartId === "downtime" ? "hrs" : selectedChartId === "production" ? "%" : "m"}
+                      {val.toLocaleString()}
                     </span>
                   </div>
                   <div className="h-6 w-full bg-surface rounded-md overflow-hidden border border-border/50 relative flex items-center">
@@ -177,13 +121,6 @@ export default function VisualizationTab() {
                         isHovered ? "brightness-110" : ""
                       }`}
                     />
-                    {item.secondaryValue && (
-                      <div
-                        style={{ width: `${(item.secondaryValue / 700) * 100}%` }}
-                        className="h-1 bg-amber-400 absolute bottom-0 left-0 transition-all duration-300"
-                        title={`Resolution Time: ${item.secondaryValue} mins`}
-                      />
-                    )}
                   </div>
                 </div>
               );
@@ -202,23 +139,27 @@ export default function VisualizationTab() {
 
               {/* Draw Line & Points */}
               {(() => {
-                const stepX = 360 / (activeChart.data.length - 1);
-                const points = activeChart.data.map((item, idx) => {
+                const stepX = data.length > 1 ? 360 / (data.length - 1) : 360;
+                const points = data.map((item: any, idx: number) => {
+                  const val = Number(item[yAxisKey]) || 0;
+                  const label = String(item[xAxisKey] || "");
                   const x = 30 + idx * stepX;
-                  const y = 170 - (item.value / maxVal) * 140;
-                  return { x, y, val: item.value, label: item.label };
+                  const y = 170 - (val / maxVal) * 140;
+                  return { x, y, val, label };
                 });
 
                 const pathString = points
-                  .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+                  .map((p: any, i: number) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
                   .join(" ");
 
-                const areaString = `${pathString} L ${points[points.length - 1].x} 170 L ${points[0].x} 170 Z`;
+                const areaString = points.length > 0
+                  ? `${pathString} L ${points[points.length - 1].x} 170 L ${points[0].x} 170 Z`
+                  : "";
 
                 return (
                   <>
                     {/* Fill Area */}
-                    <path d={areaString} fill="url(#purple-gradient)" opacity="0.15" />
+                    {areaString && <path d={areaString} fill="url(#purple-gradient-tab)" opacity="0.15" />}
                     {/* Line */}
                     <path
                       d={pathString}
@@ -229,7 +170,7 @@ export default function VisualizationTab() {
                       strokeLinejoin="round"
                     />
                     {/* Data Points */}
-                    {points.map((p, i) => {
+                    {points.map((p: any, i: number) => {
                       const isHovered = hoveredIndex === i;
                       return (
                         <g key={i} className="cursor-pointer">
@@ -253,7 +194,6 @@ export default function VisualizationTab() {
                                 height="22"
                                 rx="4"
                                 fill="#1f2937"
-                                className="shadow-lg"
                               />
                               <text
                                 x={p.x}
@@ -274,48 +214,40 @@ export default function VisualizationTab() {
                 );
               })()}
 
-              {/* Define Gradients */}
               <defs>
-                <linearGradient id="purple-gradient" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="purple-gradient-tab" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#9603ff" />
                   <stop offset="100%" stopColor="#9603ff" stopOpacity="0" />
                 </linearGradient>
               </defs>
             </svg>
             <div className="flex justify-between px-6 text-[10px] text-text-muted mt-2">
-              {activeChart.data.map((d) => (
-                <span key={d.label} className="truncate max-w-[60px] text-center block">
-                  {d.label.split(" (")[0]}
+              {data.map((d: any, idx: number) => (
+                <span key={idx} className="truncate max-w-[60px] text-center block">
+                  {String(d[xAxisKey] || "").split(" (")[0]}
                 </span>
               ))}
             </div>
           </div>
         )}
 
-        {chartType === "donut" && (
+        {chartType === "pie" && (
           <div className="flex items-center justify-center gap-6">
             <svg width="180" height="180" viewBox="0 0 36 36" className="transform -rotate-90">
               <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#f3f4f6" strokeWidth="3" />
-              {activeChart.data.map((item, idx) => {
-                const percent = (item.value / totalSum) * 100;
+              {data.map((item: any, idx: number) => {
+                const val = Number(item[yAxisKey]) || 0;
+                const percent = totalSum > 0 ? (val / totalSum) * 100 : 0;
                 const strokeDasharray = `${percent} ${100 - percent}`;
                 const strokeDashoffset = 100 - cumulativeAngle;
                 cumulativeAngle += percent;
 
-                // Color palette (purples and grays)
-                const colors = [
-                  "#9603ff", // Primary purple
-                  "#b14dff",
-                  "#cc88ff",
-                  "#e5c2ff",
-                  "#cbd5e1",
-                  "#94a3b8",
-                ];
+                const colors = ["#9603ff", "#b14dff", "#cc88ff", "#e5c2ff", "#cbd5e1", "#94a3b8"];
                 const color = colors[idx % colors.length];
 
                 return (
                   <circle
-                    key={item.label}
+                    key={idx}
                     cx="18"
                     cy="18"
                     r="15.915"
@@ -334,27 +266,22 @@ export default function VisualizationTab() {
 
             {/* Legend */}
             <div className="space-y-1.5 flex-1 max-w-[200px]">
-              {activeChart.data.map((item, idx) => {
-                const colors = [
-                  "#9603ff",
-                  "#b14dff",
-                  "#cc88ff",
-                  "#e5c2ff",
-                  "#cbd5e1",
-                  "#94a3b8",
-                ];
+              {data.map((item: any, idx: number) => {
+                const val = Number(item[yAxisKey]) || 0;
+                const label = String(item[xAxisKey] || "");
+                const colors = ["#9603ff", "#b14dff", "#cc88ff", "#e5c2ff", "#cbd5e1", "#94a3b8"];
                 const color = colors[idx % colors.length];
-                const pct = ((item.value / totalSum) * 100).toFixed(1);
+                const pct = totalSum > 0 ? ((val / totalSum) * 100).toFixed(1) : "0";
                 return (
                   <div
-                    key={item.label}
+                    key={idx}
                     className={`flex items-center justify-between text-xs transition-opacity ${
                       hoveredIndex !== null && hoveredIndex !== idx ? "opacity-40" : "opacity-100"
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                      <span className="text-text-primary truncate max-w-[100px]">{item.label}</span>
+                      <span className="text-text-primary truncate max-w-[100px]">{label}</span>
                     </div>
                     <span className="font-mono text-text-muted">{pct}%</span>
                   </div>
@@ -365,12 +292,14 @@ export default function VisualizationTab() {
         )}
       </div>
 
-      {/* Analytics Insight Card */}
+      {/* Analytics Summary */}
       <div className="bg-accent-light/40 border border-accent/15 rounded-xl p-5 flex gap-3">
         <Info className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
         <div className="space-y-1">
-          <h4 className="text-xs font-semibold text-accent uppercase tracking-wider">AI Analytical Summary</h4>
-          <p className="text-sm text-text-secondary leading-relaxed">{activeChart.insight}</p>
+          <h4 className="text-xs font-semibold text-accent uppercase tracking-wider">AI Visualization Summary</h4>
+          <p className="text-sm text-text-secondary leading-relaxed">
+            Data rendering is updated dynamically from operational records.
+          </p>
         </div>
       </div>
     </div>

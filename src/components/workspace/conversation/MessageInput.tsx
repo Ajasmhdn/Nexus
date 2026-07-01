@@ -4,7 +4,12 @@ import { useState, useRef, useEffect } from "react";
 import { Paperclip, Database, ArrowUp, X, CheckCircle2, Shield, Network, HardDrive, RefreshCw } from "lucide-react";
 import { suggestedPrompts } from "@/lib/mock-data";
 
-export default function MessageInput() {
+interface MessageInputProps {
+  onSend: (content: string) => void;
+  loading: boolean;
+}
+
+export default function MessageInput({ onSend, loading }: MessageInputProps) {
   const [value, setValue] = useState("");
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [showDbPopover, setShowDbPopover] = useState(false);
@@ -60,6 +65,20 @@ export default function MessageInput() {
     setShowDbPopover((prev) => !prev);
   };
 
+  const handleSubmit = () => {
+    if (value.trim() && !loading) {
+      onSend(value);
+      setValue("");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
     <div className="px-6 pb-6 pt-3 bg-gradient-to-t from-white via-white/95 to-transparent relative">
       <div className="max-w-[720px] mx-auto w-full relative">
@@ -86,7 +105,7 @@ export default function MessageInput() {
                   <HardDrive className="w-3 h-3" />
                   Type
                 </span>
-                <span className="font-mono text-text-primary">PostgreSQL (v16.2)</span>
+                <span className="font-mono text-text-primary">MySQL (v8.0)</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted flex items-center gap-1">
@@ -94,32 +113,32 @@ export default function MessageInput() {
                   Host
                 </span>
                 <span className="font-mono text-text-primary text-right truncate max-w-[150px]">
-                  pg-cluster-prod.internal
+                  localhost
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted">Port</span>
-                <span className="font-mono text-text-primary">5432</span>
+                <span className="font-mono text-text-primary">3306</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted">Database</span>
-                <span className="font-mono text-text-primary">ops_intelligence_db</span>
+                <span className="font-mono text-text-primary">manufacturing_operations_db</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted flex items-center gap-1">
                   <Shield className="w-3 h-3" />
                   User
                 </span>
-                <span className="font-mono text-text-primary">read_only_analyst</span>
+                <span className="font-mono text-text-primary">Nexus_app</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted">SSL Mode</span>
-                <span className="font-mono text-text-primary">Require</span>
+                <span className="font-mono text-text-primary">Preferred</span>
               </div>
             </div>
 
             <div className="mt-3.5 pt-3.5 border-t border-border flex items-center justify-between text-[10px] text-text-muted">
-              <span>Latency: 0.24ms</span>
+              <span>Latency: 0.18ms</span>
               <button className="flex items-center gap-1 text-accent hover:text-accent-hover font-medium cursor-pointer transition-colors">
                 <RefreshCw className="w-2.5 h-2.5" />
                 Refresh
@@ -141,8 +160,9 @@ export default function MessageInput() {
           {suggestedPrompts.map((prompt) => (
             <button
               key={prompt}
+              disabled={loading}
               onClick={() => setValue(prompt)}
-              className="px-3 py-1.5 bg-surface border border-border rounded-full text-xs text-text-secondary hover:text-accent hover:border-accent/30 cursor-pointer transition-colors"
+              className="px-3 py-1.5 bg-surface border border-border rounded-full text-xs text-text-secondary hover:text-accent hover:border-accent/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {prompt}
             </button>
@@ -168,6 +188,7 @@ export default function MessageInput() {
                 </div>
               </div>
               <button
+                disabled={loading}
                 onClick={removeAttachedFile}
                 className="w-5 h-5 rounded-full hover:bg-surface flex items-center justify-center text-text-muted hover:text-text-primary transition-colors cursor-pointer"
               >
@@ -179,8 +200,10 @@ export default function MessageInput() {
           <textarea
             ref={textareaRef}
             value={value}
+            disabled={loading}
+            onKeyDown={handleKeyDown}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="Ask about your operational data..."
+            placeholder={loading ? "Analyzing database..." : "Ask about your operational data..."}
             rows={1}
             className="w-full bg-transparent px-4 pt-3 pb-2 text-sm text-text-primary placeholder:text-text-muted resize-none outline-none min-h-[44px] max-h-[200px]"
           />
@@ -189,12 +212,13 @@ export default function MessageInput() {
               {/* Media Button */}
               <button
                 type="button"
+                disabled={loading}
                 onClick={handleAttachmentClick}
                 className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
                   attachedFile
                     ? "bg-accent-light text-accent"
                     : "text-text-muted hover:bg-surface hover:text-text-secondary"
-                }`}
+                } disabled:opacity-50`}
                 title="Attach file"
               >
                 <Paperclip className="w-4 h-4" />
@@ -203,13 +227,14 @@ export default function MessageInput() {
               {/* Database Connection Button */}
               <button
                 type="button"
+                disabled={loading}
                 ref={dbButtonRef}
                 onClick={handleDbClick}
                 className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
                   showDbPopover
                     ? "bg-accent-light text-accent"
                     : "text-text-muted hover:bg-surface hover:text-text-secondary"
-                }`}
+                } disabled:opacity-50`}
                 title="Database connection info"
               >
                 <Database className="w-4 h-4" />
@@ -217,10 +242,12 @@ export default function MessageInput() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-text-muted hidden sm:inline">
-                ⌘ Enter
+                Enter
               </span>
               <button
-                disabled={!value.trim() && !attachedFile}
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading || (!value.trim() && !attachedFile)}
                 className="w-8 h-8 rounded-lg bg-accent hover:bg-accent-hover flex items-center justify-center text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
               >
                 <ArrowUp className="w-4 h-4" />
